@@ -14,12 +14,12 @@ app.use(cors());
 // Multer setup for file uploads
 const upload = multer({ dest: "uploads/" });
 
-// Load TensorFlow model from Google Drive
+// Load TensorFlow model from local "models" folder
 let model;
 (async () => {
   try {
     console.log("⏳ Loading model...");
-    model = await tf.loadLayersModel("file:///content/drive/MyDrive/acne_severity_tfjs/models/65model.json");
+    model = await tf.loadLayersModel("/65model.json");
     console.log("✅ Model loaded successfully!");
   } catch (error) {
     console.error("❌ Error loading model:", error);
