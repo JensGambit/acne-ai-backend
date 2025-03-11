@@ -1,63 +1,70 @@
+require("dotenv").config(); // Load environment variables
 const express = require("express");
-const multer = require("multer");
 const cors = require("cors");
-const tf = require("@tensorflow/tfjs-node");
-const fs = require("fs");
+const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS for frontend requests
+// Middleware
 app.use(cors());
+app.use(express.json());
 
-// Serve the model file statically (from the root directory)
-app.use("/", express.static(path.join(__dirname)));
+// 📁 Ensure "uploads" directory exists
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log("📁 Created 'uploads' directory.");
+}
 
-// Multer setup for file uploads
-const upload = multer({ dest: "uploads/" });
+// 🔹 Multer storage setup for handling image uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir); // Store files in "uploads" directory
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Rename file with timestamp
+  },
+});
 
-// Load TensorFlow model from root directory
-let model;
-(async () => {
+const upload = multer({ storage });
+
+// 📌 Upload image endpoint
+app.post("/upload", upload.single("image"), (req, res) => {
   try {
-    console.log("⏳ Loading model...");
-    model = await tf.loadLayersModel(`file://${path.join(__dirname, "65model.json")}`);
-    console.log("✅ Model loaded successfully!");
-  } catch (error) {
-    console.error("❌ Error loading model:", error);
-  }
-})();
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file uploaded." });
+    }
 
-// Image Preprocessing
-const preprocessImage = async (filePath) => {
-  const imageBuffer = fs.readFileSync(filePath);
-  const decodedImage = tf.node.decodeImage(imageBuffer);
-  const resizedImage = tf.image.resizeBilinear(decodedImage, [224, 224]); // Adjust size
-  const normalizedImage = resizedImage.div(tf.scalar(255)).expandDims();
-  return normalizedImage;
-};
+    const imagePath = `/uploads/${req.file.filename}`;
+    console.log(`✅ Image uploaded: ${imagePath}`);
 
-// Prediction Route
-app.post("/predict", upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
-
-  try {
-    const filePath = path.join(__dirname, req.file.path);
-    const processedImage = await preprocessImage(filePath);
-    const prediction = model.predict(processedImage);
-    const result = (await prediction.data())[0]; // Adjust based on model output
-
-    fs.unlinkSync(filePath); // Cleanup temp file
-
-    res.json({ prediction: result });
-  } catch (error) {
-    console.error("❌ Error processing image:", error);
-    res.status(500).json({ error: "Prediction failed" });
+    res.status(200).json({ message: "Image uploaded successfully!", path: imagePath });
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ error: "Failed to upload image." });
   }
 });
 
-// Start the server
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+// 📂 Serve uploaded images
+app.use("/uploads", express.static(uploadDir));
+
+// 📁 Ensure "dist" directory exists
+const distPath = path.join(__dirname, "dist");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+
+  // Handle React frontend routing
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+} else {
+  console.warn("⚠️ 'dist' folder not found. Build your React app first with 'npm run build'.");
+}
+
+// 🚀 Start the server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
