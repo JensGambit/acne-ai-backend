@@ -4,9 +4,10 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "prestart": "npm install",
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "echo 'No build step needed for backend'",
+    "build": "echo 'Skipping build step for backend'",
     "lint": "eslint . --fix"
   },
   "dependencies": {
