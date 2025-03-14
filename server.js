@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Define Backend & Frontend URLs (Supports multiple deployments)
+// ✅ Define Backend & Frontend URLs
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
@@ -64,40 +64,12 @@ app.post("/upload", upload.single("image"), (req, res) => {
     });
 });
 
-// ✅ Serve static frontend files
-const distPath = path.join(__dirname, "dist");
-if (!fs.existsSync(distPath)) {
-    fs.mkdirSync(distPath, { recursive: true });
-}
-
-app.use(express.static(distPath));
-
 // ✅ Serve Model Files (Ensure models are inside `public/models`)
 const modelPath = path.join(__dirname, "public/models");
 app.use("/models", express.static(modelPath));
 
 // ✅ Serve Uploaded Files
 app.use("/uploads", express.static(uploadDir));
-
-// ✅ Favicon Handling (Fix Netlify Errors)
-app.get("/favicon.ico", (req, res) => {
-    const faviconPath = path.join(__dirname, "public/favicon.ico");
-    if (fs.existsSync(faviconPath)) {
-        res.sendFile(faviconPath);
-    } else {
-        res.status(204).end(); // ✅ Prevents 404 spam in Netlify logs
-    }
-});
-
-// ✅ Catch-All Route for React Frontend
-app.get("*", (req, res) => {
-    const indexPath = path.join(distPath, "index.html");
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).json({ error: "Frontend not built yet. Run `npm run build`." });
-    }
-});
 
 // ✅ Start Server
 app.listen(PORT, () => {
