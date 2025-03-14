@@ -8,30 +8,39 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Ensure 'uploads/' directory exists
+// Directory paths from environment variables or defaults
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+const distPath = process.env.DIST_DIR || path.join(__dirname, 'dist');
+const modelPath = process.env.MODEL_DIR || path.join(__dirname, 'public/models');
+const faviconPath = path.join(__dirname, 'public/favicon.png');
+
+// Ensure necessary directories exist
+[uploadDir, distPath].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+});
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: '*', methods: 'GET,POST,PUT,DELETE' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// File upload setup
+// File upload setup with validation
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    },
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
 });
 
 const upload = multer({ 
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        return extname && mimetype ? cb(null, true) : cb(new Error('Only images allowed!'));
+    }
 });
 
 // Image Upload Endpoint
@@ -45,38 +54,22 @@ app.post('/upload', upload.single('image'), (req, res) => {
     });
 });
 
-// Serve static files from React build folder
-const distPath = process.env.DIST_DIR || path.join(__dirname, 'dist');
-if (!fs.existsSync(distPath)) {
-    fs.mkdirSync(distPath, { recursive: true });
-}
+// Serve static files from React frontend
 app.use(express.static(distPath));
 
 // Serve Model Files
-const modelPath = process.env.MODEL_DIR || path.join(__dirname, 'public/models');
 app.use('/models', express.static(modelPath));
 
 // Serve favicon if available
 app.get('/favicon.ico', (req, res) => {
-    const faviconPath = path.join(__dirname, 'public/favicon.png');
-    if (fs.existsSync(faviconPath)) {
-        res.sendFile(faviconPath);
-    } else {
-        res.status(404).send('Favicon not found');
-    }
+    return fs.existsSync(faviconPath) ? res.sendFile(faviconPath) : res.status(404).send('Favicon not found');
 });
 
 // Catch-all route for React frontend (only if index.html exists)
 app.get('*', (req, res) => {
     const indexPath = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).send('Frontend not built yet. Run `npm run build`.');
-    }
+    return fs.existsSync(indexPath) ? res.sendFile(indexPath) : res.status(404).send('Frontend not built yet. Run `npm run build`.');
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
