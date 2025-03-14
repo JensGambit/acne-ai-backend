@@ -8,68 +8,72 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Directory paths from environment variables or defaults
-const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
-const distPath = process.env.DIST_DIR || path.join(__dirname, 'dist');
-const modelPath = process.env.MODEL_DIR || path.join(__dirname, 'public/models');
-const faviconPath = path.join(__dirname, 'public/favicon.png');
+// Backend URL for the frontend to connect
+const FRONTEND_URL = "https://acneseverity.onrender.com";
 
-// Ensure necessary directories exist
-[uploadDir, distPath].forEach(dir => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-});
+// Ensure 'uploads/' directory exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Middleware
-app.use(cors({ origin: '*', methods: 'GET,POST,PUT,DELETE' }));
+app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// File upload setup with validation
+// File upload setup
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
+    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
-
-const upload = multer({ 
-    storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        return extname && mimetype ? cb(null, true) : cb(new Error('Only images allowed!'));
-    }
-});
+const upload = multer({ storage });
 
 // Image Upload Endpoint
-app.post('/upload', upload.single('image'), (req, res) => {
+app.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No image uploaded.' });
     }
-    res.status(200).json({ 
-        message: 'Image uploaded successfully!', 
-        path: `/uploads/${req.file.filename}` 
-    });
+    res.status(200).json({ message: 'Image uploaded successfully!', path: `/uploads/${req.file.filename}` });
 });
 
-// Serve static files from React frontend
-app.use(express.static(distPath));
+// ✅ New Endpoint for Model Processing (Dummy Implementation)
+app.post('/predict', upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No image uploaded for prediction.' });
+    }
+    
+    // Simulate AI prediction response
+    const severityLevel = Math.floor(Math.random() * 4); // Random severity level 0-3
+    res.status(200).json({ prediction: severityLevel });
+});
 
-// Serve Model Files
-app.use('/models', express.static(modelPath));
+// Serve static files from React build folder
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
+app.use('/models', express.static(path.join(__dirname, 'public/models')));
 
 // Serve favicon if available
 app.get('/favicon.ico', (req, res) => {
-    return fs.existsSync(faviconPath) ? res.sendFile(faviconPath) : res.status(404).send('Favicon not found');
+    const faviconPath = path.join(__dirname, 'public/favicon.png');
+    if (fs.existsSync(faviconPath)) {
+        res.sendFile(faviconPath);
+    } else {
+        res.status(404).send('Favicon not found');
+    }
 });
 
-// Catch-all route for React frontend (only if index.html exists)
+// Serve frontend
 app.get('*', (req, res) => {
     const indexPath = path.join(distPath, 'index.html');
-    return fs.existsSync(indexPath) ? res.sendFile(indexPath) : res.status(404).send('Frontend not built yet. Run `npm run build`.');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Frontend not built yet. Run `npm run build`.');
+    }
 });
 
 // Start server
-app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+});
