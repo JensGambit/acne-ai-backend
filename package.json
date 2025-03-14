@@ -2,8 +2,12 @@
   "name": "acne-ai-backend",
   "version": "1.0.0",
   "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "echo 'No build step needed for backend'",
+    "lint": "eslint . --fix"
   },
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.0.0",
@@ -11,5 +15,9 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "multer": "^1.4.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0",
+    "eslint": "^9.21.0"
   }
 }
