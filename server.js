@@ -1,9 +1,11 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -13,14 +15,14 @@ const BACKEND_URL = "https://acne-ai-backend.onrender.com";
 const FRONTEND_URL = "https://acneseverity.onrender.com";
 
 // ✅ Ensure 'uploads/' directory exists
-const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 // ✅ Middleware
 app.use(cors({
-    origin: FRONTEND_URL, // Allow frontend access
+    origin: FRONTEND_URL,
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept",
     credentials: true
@@ -55,33 +57,24 @@ app.post('/upload', upload.single('image'), (req, res) => {
     });
 });
 
-// ✅ Serve static files from React build folder with correct MIME types
-const distPath = process.env.DIST_DIR || path.join(__dirname, 'dist');
+// ✅ Serve static files from React build folder
+const distPath = process.env.DIST_DIR || path.join(process.cwd(), 'dist');
 if (!fs.existsSync(distPath)) {
     fs.mkdirSync(distPath, { recursive: true });
 }
 
-app.use(express.static(distPath, {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
-        }
-        if (filePath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css');
-        }
-    }
-}));
+app.use(express.static(distPath));
 
 // ✅ Serve Model Files
-const modelPath = process.env.MODEL_DIR || path.join(__dirname, 'public/models');
+const modelPath = process.env.MODEL_DIR || path.join(process.cwd(), 'public/models');
 app.use('/models', express.static(modelPath));
 
-// ✅ Serve uploads folder (for images)
+// ✅ Serve uploads folder
 app.use('/uploads', express.static(uploadDir));
 
-// ✅ Serve favicon if available
+// ✅ Serve favicon
 app.get('/favicon.ico', (req, res) => {
-    const faviconPath = path.join(__dirname, 'public/favicon.png');
+    const faviconPath = path.join(process.cwd(), 'public/favicon.png');
     if (fs.existsSync(faviconPath)) {
         res.sendFile(faviconPath);
     } else {
@@ -89,7 +82,7 @@ app.get('/favicon.ico', (req, res) => {
     }
 });
 
-// ✅ Catch-all route for React frontend (only if index.html exists)
+// ✅ Catch-all route for React frontend
 app.get('*', (req, res) => {
     const indexPath = path.join(distPath, 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -99,7 +92,7 @@ app.get('*', (req, res) => {
     }
 });
 
-// ✅ Start server (Fixed missing closing `}` and `)`)
+// ✅ Start server
 app.listen(PORT, () => {
     console.log(`✅ Server running at ${BACKEND_URL} on port ${PORT}`);
 });
