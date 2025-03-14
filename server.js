@@ -16,11 +16,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ✅ Define Backend & Frontend URLs (Supports multiple deployments)
-const BACKEND_URL = process.env.BACKEND_URL || "https://acne-ai-backend.onrender.com";
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://acneseverity.netlify.app";
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 // ✅ Ensure 'uploads/' directory exists
-const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, "uploads");
+const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -65,26 +65,15 @@ app.post("/upload", upload.single("image"), (req, res) => {
 });
 
 // ✅ Serve static frontend files
-const distPath = process.env.DIST_DIR || path.join(__dirname, "dist");
+const distPath = path.join(__dirname, "dist");
 if (!fs.existsSync(distPath)) {
     fs.mkdirSync(distPath, { recursive: true });
 }
 
-app.use(
-    express.static(distPath, {
-        setHeaders: (res, filePath) => {
-            if (filePath.endsWith(".js")) {
-                res.setHeader("Content-Type", "application/javascript");
-            }
-            if (filePath.endsWith(".css")) {
-                res.setHeader("Content-Type", "text/css");
-            }
-        },
-    })
-);
+app.use(express.static(distPath));
 
 // ✅ Serve Model Files (Ensure models are inside `public/models`)
-const modelPath = process.env.MODEL_DIR || path.join(__dirname, "public/models");
+const modelPath = path.join(__dirname, "public/models");
 app.use("/models", express.static(modelPath));
 
 // ✅ Serve Uploaded Files
