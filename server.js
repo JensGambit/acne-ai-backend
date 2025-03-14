@@ -102,4 +102,8 @@ app.get('*', (req, res) => {
 // ✅ Start server
 app.listen(PORT, () => {
     console.log(`✅ Server running at ${BACKEND_URL}`);
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> 97cda8dd6334e728ff92a4280f4aa2e60f9fcd6f
