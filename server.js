@@ -8,7 +8,7 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Define Backend URL for CORS
+// ✅ Define Backend & Frontend URLs
 const BACKEND_URL = "https://acne-ai-backend.onrender.com";
 const FRONTEND_URL = "https://acneseverity.onrender.com";
 
@@ -99,6 +99,7 @@ app.get('*', (req, res) => {
     }
 });
 
-// ✅ Start server
+// ✅ Start server (Fixed missing closing `}` and `)`)
 app.listen(PORT, () => {
-    console.log(`✅ Server running at ${BACKEND_URL}`);
+    console.log(`✅ Server running at ${BACKEND_URL} on port ${PORT}`);
+});
