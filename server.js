@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 // ✅ Load environment variables
 dotenv.config();
 
-// ✅ Fix __dirname and __filename for ES modules
+// ✅ Fix __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -26,29 +26,24 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ✅ Middleware
-app.use(
-    cors({
-        origin: [FRONTEND_URL, "http://localhost:5173"], // Allow Frontend URLs
-        methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-        allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept",
-        credentials: true,
-    })
-);
+// ✅ Middleware Setup
+app.use(cors({
+    origin: (origin, callback) => {
+        const allowedOrigins = [FRONTEND_URL, "http://localhost:5173"];
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("CORS not allowed"));
+        }
+    },
+    credentials: true,
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ File Upload Setup
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    },
-});
-
+// ✅ Multer Storage (Using memoryStorage for TensorFlow Processing)
+const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB Limit
 
 // ✅ Image Upload Endpoint
@@ -56,18 +51,30 @@ app.post("/upload", upload.single("image"), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: "No image uploaded." });
     }
+
+    const filePath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
+    fs.writeFileSync(filePath, req.file.buffer); // ✅ Save image to disk
+
     res.status(200).json({
         message: "✅ Image uploaded successfully!",
-        path: `${BACKEND_URL}/uploads/${req.file.filename}`,
+        path: `${BACKEND_URL}/uploads/${path.basename(filePath)}`,
     });
 });
 
 // ✅ Serve Model Files (Ensure models are inside `public/models`)
-const modelPath = path.join(__dirname, "public/models");
+const modelPath = path.join(__dirname, "public", "models");
+if (!fs.existsSync(modelPath)) {
+    console.error("❌ Model directory not found:", modelPath);
+}
 app.use("/models", express.static(modelPath));
 
 // ✅ Serve Uploaded Files
 app.use("/uploads", express.static(uploadDir));
+
+// ✅ API Health Check
+app.get("/", (req, res) => {
+    res.json({ message: "✅ Acne Severity Detector API is Running!" });
+});
 
 // ✅ Start Server
 app.listen(PORT, () => {
