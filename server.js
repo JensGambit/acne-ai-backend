@@ -12,7 +12,7 @@ const port = process.env.PORT || 5000;
 // Enable CORS
 app.use(
   cors({
-    origin: "*", // Allow all origins (replace with your frontend URL in production)
+    origin: "https://acneseverityai.netlify.app", // Allow only your frontend URL
     methods: ["POST"], // Allow only POST requests
   })
 );
@@ -103,6 +103,12 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "Server is running." });
+});
+
+// Log incoming requests
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
 });
 
 // Start the server
