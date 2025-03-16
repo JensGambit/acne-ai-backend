@@ -1,77 +1,114 @@
-import dotenv from "dotenv";
-import express from "express";
-import cors from "cors";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+const express = require("express");
+const multer = require("multer");
+const cors = require("cors");
+const tf = require("@tensorflow/tfjs-node");
+const fs = require("fs");
+const path = require("path");
 
-// ✅ Load environment variables
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+// Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 5000;
+const port = process.env.PORT || 5000;
 
-// ✅ Define Backend & Frontend URLs
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-
-// ✅ Ensure 'uploads/' directory exists
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// ✅ Middleware
+// Enable CORS
 app.use(
-    cors({
-        origin: [FRONTEND_URL, "http://localhost:5173"], // Allow Netlify & Local Dev
-        methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-        allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept",
-        credentials: true,
-    })
+  cors({
+    origin: "*", // Allow all origins (replace with your frontend URL in production)
+    methods: ["POST"], // Allow only POST requests
+  })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ✅ File Upload Setup
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    },
-});
-
+// Set up multer for file uploads
 const upload = multer({
-    storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB Limit
-});
-
-// ✅ Image Upload Endpoint
-app.post("/upload", upload.single("image"), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: "No image uploaded." });
+  dest: "uploads/", // Temporary folder for uploaded files
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true); // Accept the file
+    } else {
+      cb(new Error("Invalid file type. Only images are allowed.")); // Reject the file
     }
-    res.status(200).json({
-        message: "✅ Image uploaded successfully!",
-        path: `${BACKEND_URL}/uploads/${req.file.filename}`,
+  },
+});
+
+// Load your TensorFlow.js model
+const MODEL_PATH = path.join(__dirname, "public", "models", "model.json");
+let model;
+
+async function loadModel() {
+  try {
+    console.log("Loading model...");
+    model = await tf.loadLayersModel(`file://${MODEL_PATH}`);
+    console.log("Model loaded!");
+  } catch (err) {
+    console.error("Failed to load model:", err);
+    process.exit(1); // Exit if the model fails to load
+  }
+}
+
+// Preprocess the image
+function preprocessImage(imageBuffer) {
+  const imageTensor = tf.node.decodeImage(imageBuffer);
+  const resizedImage = tf.image.resizeBilinear(imageTensor, [224, 224]);
+  const normalizedImage = resizedImage.div(tf.scalar(255)).expandDims();
+  return normalizedImage;
+}
+
+// Predict using the model
+async function predict(imageTensor) {
+  const predictions = await model.predict(imageTensor);
+  const severityLevel = predictions.argMax(1).dataSync()[0];
+  const confidence = predictions.max().dataSync()[0];
+  return { severityLevel, confidence };
+}
+
+// Analyze image endpoint
+app.post("/analyze", upload.single("image"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No image file uploaded." });
+  }
+
+  const imagePath = req.file.path;
+
+  try {
+    // Read the uploaded image
+    const imageBuffer = await fs.promises.readFile(imagePath);
+
+    // Preprocess the image
+    const imageTensor = preprocessImage(imageBuffer);
+
+    // Predict using the model
+    const { severityLevel, confidence } = await predict(imageTensor);
+
+    // Clean up the uploaded file
+    await fs.promises.unlink(imagePath);
+
+    // Send the result
+    res.json({
+      severityLevel,
+      confidence,
+      message: "Analysis complete!",
     });
+  } catch (err) {
+    console.error("Error analyzing image:", err);
+
+    // Clean up the uploaded file in case of error
+    if (fs.existsSync(imagePath)) {
+      await fs.promises.unlink(imagePath);
+    }
+
+    res.status(500).json({ error: "Failed to analyze image." });
+  }
 });
 
-// ✅ Serve Model Files (Ensure models are inside `public/models`)
-const modelPath = path.join(__dirname, "public/models");
-app.use("/models", express.static(modelPath));
-
-// ✅ Serve Uploaded Files
-app.use("/uploads", express.static(uploadDir));
-
-// ✅ Start Server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running at ${BACKEND_URL} on port ${PORT}`);
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", message: "Server is running." });
 });
+
+// Start the server
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
+});
+
+// Load the model when the server starts
+loadModel();
