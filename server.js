@@ -1,120 +1,75 @@
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const tf = require("@tensorflow/tfjs-node");
-const fs = require("fs");
-const path = require("path");
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 
-// Initialize Express app
+// ✅ Load environment variables
+dotenv.config();
+
+// ✅ Fix __dirname and __filename for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-const port = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
-// Enable CORS
+// ✅ Define Backend & Frontend URLs
+const BACKEND_URL = process.env.BACKEND_URL || "https://acne-ai-backend.onrender.com";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://acneseverityai.netlify.app";
+
+// ✅ Ensure 'uploads/' directory exists
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// ✅ Middleware
 app.use(
-  cors({
-    origin: "https://acneseverityai.netlify.app", // Allow only your frontend URL
-    methods: ["POST"], // Allow only POST requests
-  })
+    cors({
+        origin: [FRONTEND_URL, "http://localhost:5173"], // Allow Frontend URLs
+        methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+        allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept",
+        credentials: true,
+    })
 );
 
-// Set up multer for file uploads
-const upload = multer({
-  dest: "uploads/", // Temporary folder for uploaded files
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
-      cb(null, true); // Accept the file
-    } else {
-      cb(new Error("Invalid file type. Only images are allowed.")); // Reject the file
-    }
-  },
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ File Upload Setup
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    },
 });
 
-// Load your TensorFlow.js model
-const MODEL_PATH = path.join(__dirname, "public", "models", "model.json");
-let model;
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB Limit
 
-async function loadModel() {
-  try {
-    console.log("Loading model...");
-    model = await tf.loadLayersModel(`file://${MODEL_PATH}`);
-    console.log("Model loaded!");
-  } catch (err) {
-    console.error("Failed to load model:", err);
-    process.exit(1); // Exit if the model fails to load
-  }
-}
-
-// Preprocess the image
-function preprocessImage(imageBuffer) {
-  const imageTensor = tf.node.decodeImage(imageBuffer);
-  const resizedImage = tf.image.resizeBilinear(imageTensor, [224, 224]);
-  const normalizedImage = resizedImage.div(tf.scalar(255)).expandDims();
-  return normalizedImage;
-}
-
-// Predict using the model
-async function predict(imageTensor) {
-  const predictions = await model.predict(imageTensor);
-  const severityLevel = predictions.argMax(1).dataSync()[0];
-  const confidence = predictions.max().dataSync()[0];
-  return { severityLevel, confidence };
-}
-
-// Analyze image endpoint
-app.post("/analyze", upload.single("image"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No image file uploaded." });
-  }
-
-  const imagePath = req.file.path;
-
-  try {
-    // Read the uploaded image
-    const imageBuffer = await fs.promises.readFile(imagePath);
-
-    // Preprocess the image
-    const imageTensor = preprocessImage(imageBuffer);
-
-    // Predict using the model
-    const { severityLevel, confidence } = await predict(imageTensor);
-
-    // Clean up the uploaded file
-    await fs.promises.unlink(imagePath);
-
-    // Send the result
-    res.json({
-      severityLevel,
-      confidence,
-      message: "Analysis complete!",
+// ✅ Image Upload Endpoint
+app.post("/upload", upload.single("image"), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: "No image uploaded." });
+    }
+    res.status(200).json({
+        message: "✅ Image uploaded successfully!",
+        path: `${BACKEND_URL}/uploads/${req.file.filename}`,
     });
-  } catch (err) {
-    console.error("Error analyzing image:", err);
-
-    // Clean up the uploaded file in case of error
-    if (fs.existsSync(imagePath)) {
-      await fs.promises.unlink(imagePath);
-    }
-
-    res.status(500).json({ error: "Failed to analyze image." });
-  }
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK", message: "Server is running." });
-});
+// ✅ Serve Model Files (Ensure models are inside `public/models`)
+const modelPath = path.join(__dirname, "public/models");
+app.use("/models", express.static(modelPath));
 
-// Log incoming requests
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
+// ✅ Serve Uploaded Files
+app.use("/uploads", express.static(uploadDir));
 
-// Start the server
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+// ✅ Start Server
+app.listen(PORT, () => {
+    console.log(`🚀 Server running at ${BACKEND_URL} on port ${PORT}`);
 });
-
-// Load the model when the server starts
-loadModel();
