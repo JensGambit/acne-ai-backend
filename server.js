@@ -5,7 +5,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
-import * as tf from "@tensorflow/tfjs-node";
+import * as tf from "@tensorflow/tfjs-node"; // TensorFlow.js for Node.js
 
 // ✅ Load environment variables
 dotenv.config();
@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 // ✅ Define Backend & Frontend URLs
 const BACKEND_URL = process.env.BACKEND_URL || "https://acne-ai-backend.onrender.com";
@@ -47,43 +47,44 @@ app.use(express.urlencoded({ extended: true }));
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB Limit
 
-// ✅ Load the TensorFlow Model
+// ✅ Load TensorFlow Model
 let model;
-(async () => {
+const loadModel = async () => {
     try {
-        model = await tf.loadLayersModel(`file://${path.join(__dirname, "public", "models", "model.json")}`);
+        const modelPath = path.join(__dirname, "public", "models", "model.json");
+        model = await tf.loadLayersModel(`file://${modelPath}`);
+        
+        // ✅ Ensure model has an input layer
+        if (!model.inputs || model.inputs.length === 0) {
+            console.error("❌ Model missing InputLayer. Rebuilding...");
+            model.add(tf.input({ shape: [224, 224, 3] })); // Ensure correct input shape
+        }
+
         console.log("✅ Model loaded successfully!");
     } catch (error) {
         console.error("❌ Error loading model:", error);
     }
-})();
+};
 
-// ✅ Image Upload & Prediction Endpoint
-app.post("/predict", upload.single("image"), async (req, res) => {
+// ✅ Call model loading function
+loadModel();
+
+// ✅ Image Upload Endpoint
+app.post("/upload", upload.single("image"), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: "No image uploaded." });
         }
-        
-        // ✅ Process Image
-        const imageBuffer = req.file.buffer;
-        const tensor = tf.node.decodeImage(imageBuffer, 3)
-            .resizeNearestNeighbor([224, 224])
-            .expandDims()
-            .toFloat().div(tf.scalar(255));
-        
-        // ✅ Perform Prediction
-        const prediction = model.predict(tensor);
-        const scores = prediction.arraySync()[0];
-        const classIndex = scores.indexOf(Math.max(...scores));
-        const severityLabels = ["Extremely Mild", "Mild", "Moderate", "Severe"];
-        
+
+        const filePath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
+        await fs.promises.writeFile(filePath, req.file.buffer); // ✅ Save image asynchronously
+
         res.status(200).json({
-            severity: severityLabels[classIndex],
-            confidence: scores[classIndex],
+            message: "✅ Image uploaded successfully!",
+            path: `${BACKEND_URL}/uploads/${path.basename(filePath)}`,
         });
     } catch (error) {
-        console.error("❌ Prediction Error:", error);
+        console.error("❌ Image Upload Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
