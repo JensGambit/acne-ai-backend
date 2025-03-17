@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
+import * as tf from "@tensorflow/tfjs-node";
 
 // ✅ Load environment variables
 dotenv.config();
@@ -46,22 +47,43 @@ app.use(express.urlencoded({ extended: true }));
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB Limit
 
-// ✅ Image Upload Endpoint
-app.post("/upload", upload.single("image"), async (req, res) => {
+// ✅ Load the TensorFlow Model
+let model;
+(async () => {
+    try {
+        model = await tf.loadLayersModel(`file://${path.join(__dirname, "public", "models", "model.json")}`);
+        console.log("✅ Model loaded successfully!");
+    } catch (error) {
+        console.error("❌ Error loading model:", error);
+    }
+})();
+
+// ✅ Image Upload & Prediction Endpoint
+app.post("/predict", upload.single("image"), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: "No image uploaded." });
         }
-
-        const filePath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
-        await fs.promises.writeFile(filePath, req.file.buffer); // ✅ Save image asynchronously
-
+        
+        // ✅ Process Image
+        const imageBuffer = req.file.buffer;
+        const tensor = tf.node.decodeImage(imageBuffer, 3)
+            .resizeNearestNeighbor([224, 224])
+            .expandDims()
+            .toFloat().div(tf.scalar(255));
+        
+        // ✅ Perform Prediction
+        const prediction = model.predict(tensor);
+        const scores = prediction.arraySync()[0];
+        const classIndex = scores.indexOf(Math.max(...scores));
+        const severityLabels = ["Extremely Mild", "Mild", "Moderate", "Severe"];
+        
         res.status(200).json({
-            message: "✅ Image uploaded successfully!",
-            path: `${BACKEND_URL}/uploads/${path.basename(filePath)}`,
+            severity: severityLabels[classIndex],
+            confidence: scores[classIndex],
         });
     } catch (error) {
-        console.error("❌ Image Upload Error:", error);
+        console.error("❌ Prediction Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
