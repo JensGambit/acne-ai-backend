@@ -47,18 +47,23 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB Limit
 
 // ✅ Image Upload Endpoint
-app.post("/upload", upload.single("image"), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: "No image uploaded." });
+app.post("/upload", upload.single("image"), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "No image uploaded." });
+        }
+
+        const filePath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
+        await fs.promises.writeFile(filePath, req.file.buffer); // ✅ Save image asynchronously
+
+        res.status(200).json({
+            message: "✅ Image uploaded successfully!",
+            path: `${BACKEND_URL}/uploads/${path.basename(filePath)}`,
+        });
+    } catch (error) {
+        console.error("❌ Image Upload Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
     }
-
-    const filePath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
-    fs.writeFileSync(filePath, req.file.buffer); // ✅ Save image to disk
-
-    res.status(200).json({
-        message: "✅ Image uploaded successfully!",
-        path: `${BACKEND_URL}/uploads/${path.basename(filePath)}`,
-    });
 });
 
 // ✅ Serve Model Files (Ensure models are inside `public/models`)
