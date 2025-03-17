@@ -1,9 +1,15 @@
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const tf = require("@tensorflow/tfjs-node");
-const fs = require("fs");
-const path = require("path");
+import express from "express";
+import multer from "multer";
+import cors from "cors";
+import * as tf from "@tensorflow/tfjs-node";
+import fs from "fs/promises"; // Use fs.promises for async file handling
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+// Get the directory name (__dirname equivalent in ES modules)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Initialize Express app
 const app = express();
@@ -74,16 +80,16 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
   const imagePath = req.file.path;
 
   try {
-    const imageBuffer = await fs.promises.readFile(imagePath);
+    const imageBuffer = await fs.readFile(imagePath);
     const imageTensor = preprocessImage(imageBuffer);
     const { severityLevel, confidence } = await predict(imageTensor);
 
-    await fs.promises.unlink(imagePath); // Cleanup file
+    await fs.unlink(imagePath); // Cleanup file
 
     res.json({ severityLevel, confidence, message: "Analysis complete!" });
   } catch (err) {
     console.error("❌ Error analyzing image:", err);
-    if (fs.existsSync(imagePath)) await fs.promises.unlink(imagePath);
+    if (fs.existsSync(imagePath)) await fs.unlink(imagePath);
     res.status(500).json({ error: "Failed to analyze image." });
   }
 });
