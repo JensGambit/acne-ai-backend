@@ -5,7 +5,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
-import * as tf from "@tensorflow/tfjs-node"; // TensorFlow.js for Node.js
+import * as tf from "@tensorflow/tfjs-node";
 
 // ✅ Load environment variables
 dotenv.config();
@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 5000;
 
 // ✅ Define Backend & Frontend URLs
 const BACKEND_URL = process.env.BACKEND_URL || "https://acne-ai-backend.onrender.com";
@@ -51,18 +51,19 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5M
 let model;
 const loadModel = async () => {
     try {
-        const modelPath = path.join(__dirname, "public", "models", "model.json");
-        model = await tf.loadLayersModel(`file://${modelPath}`);
-        
-        // ✅ Ensure model has an input layer
-        if (!model.inputs || model.inputs.length === 0) {
-            console.error("❌ Model missing InputLayer. Rebuilding...");
-            model.add(tf.input({ shape: [224, 224, 3] })); // Ensure correct input shape
-        }
+        console.log("⏳ Loading TensorFlow model...");
+        const modelPath = `file://${path.join(__dirname, "public", "models", "model.json")}`;
+        model = await tf.loadLayersModel(modelPath);
+
+        // ✅ Pre-warm the model to prevent cold start lag
+        const dummyInput = tf.zeros([1, 224, 224, 3]);
+        model.predict(dummyInput);
+        dummyInput.dispose();
 
         console.log("✅ Model loaded successfully!");
     } catch (error) {
         console.error("❌ Error loading model:", error);
+        process.exit(1); // Exit if model loading fails
     }
 };
 
@@ -89,12 +90,34 @@ app.post("/upload", upload.single("image"), async (req, res) => {
     }
 });
 
-// ✅ Serve Model Files (Ensure models are inside `public/models`)
-const modelPath = path.join(__dirname, "public", "models");
-if (!fs.existsSync(modelPath)) {
-    console.error("❌ Model directory not found:", modelPath);
-}
-app.use("/models", express.static(modelPath));
+// ✅ Image Analysis Endpoint
+app.post("/analyze", upload.single("image"), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "No image provided." });
+        }
+
+        if (!model) {
+            return res.status(500).json({ error: "Model not loaded yet. Please retry later." });
+        }
+
+        // ✅ Convert image buffer to Tensor
+        const tensor = tf.node.decodeImage(req.file.buffer).resizeBilinear([224, 224]).expandDims(0).toFloat().div(tf.scalar(255));
+
+        // ✅ Run model prediction
+        const prediction = model.predict(tensor);
+        const result = await prediction.data();
+        tensor.dispose(); // ✅ Clean up tensor
+
+        res.json({ message: "✅ Analysis Complete", result });
+    } catch (error) {
+        console.error("❌ Error processing image:", error);
+        res.status(500).json({ error: "Error analyzing image" });
+    }
+});
+
+// ✅ Serve Model Files
+app.use("/models", express.static(path.join(__dirname, "public", "models")));
 
 // ✅ Serve Uploaded Files
 app.use("/uploads", express.static(uploadDir));
