@@ -17,11 +17,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Define URLs
+// ✅ Ensure environment variables exist
 const BACKEND_URL = process.env.BACKEND_URL || `https://acne-ai-backend-2nmn.onrender.com`;
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://acneseverityai.netlify.app";
+console.log(`🌍 BACKEND_URL: ${BACKEND_URL}`);
+console.log(`🌍 FRONTEND_URL: ${FRONTEND_URL}`);
 
-// ✅ Ensure 'uploads/' directory exists
+// ✅ Ensure 'uploads/' directory exists (local only)
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -51,8 +53,15 @@ let model;
 const loadModel = async () => {
     try {
         console.log("⏳ Loading TensorFlow model...");
-        const modelPath = `file://${path.join(__dirname, "public", "models", "model.json")}`;
-        model = await tf.loadLayersModel(modelPath);
+        const modelPath = path.join(__dirname, "public", "models", "model.json");
+
+        // Check if model exists before loading
+        if (!fs.existsSync(modelPath)) {
+            console.error("❌ Model file not found at:", modelPath);
+            process.exit(1);
+        }
+
+        model = await tf.loadLayersModel(`file://${modelPath}`);
 
         // ✅ Pre-warm the model to prevent cold start lag
         const dummyInput = tf.zeros([1, 224, 224, 3]);
