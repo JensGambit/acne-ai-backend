@@ -6,6 +6,7 @@ import fs from "fs/promises"; // Async file handling
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import serverless from "serverless-http";
 
 // Get the directory name (__dirname equivalent in ES modules)
 const __filename = fileURLToPath(import.meta.url);
@@ -13,19 +14,18 @@ const __dirname = dirname(__filename);
 
 // Initialize Express app
 const app = express();
-const port = process.env.PORT || 5000;
 
-// Enable CORS (Configurable for production & development)
+// Enable CORS (Netlify functions require explicit CORS handling)
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "https://acneseverityai.netlify.app",
+    origin: process.env.CORS_ORIGIN || "*", // Allow frontend to access API
     methods: ["POST"],
   })
 );
 
 // Set up multer for file uploads
 const upload = multer({
-  dest: "uploads/",
+  dest: "/tmp/uploads/", // Use `/tmp` for Netlify's file system
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     file.mimetype.startsWith("image/")
@@ -35,7 +35,7 @@ const upload = multer({
 });
 
 // Load TensorFlow model
-const MODEL_PATH = path.join(__dirname, "public", "models", "model.json");
+const MODEL_PATH = path.join(__dirname, "..", "public", "models", "model.json");
 let model;
 
 async function loadModel() {
@@ -71,7 +71,7 @@ async function predict(imageTensor) {
   return { severityLevel, confidence };
 }
 
-// Analyze image endpoint
+// Analyze image endpoint (Serverless function)
 app.post("/analyze", upload.single("image"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No image file uploaded." });
@@ -99,20 +99,5 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "Server is running." });
 });
 
-// Root route for verification
-app.get("/", (req, res) => {
-  res.status(200).send("✅ Backend is deployed on Railway!");
-});
-
-// Logging middleware
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
-
-// Start server after loading model
-loadModel().then(() => {
-  app.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
-  });
-});
+// Export the serverless function
+export const handler = serverless(app);
