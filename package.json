@@ -7,7 +7,9 @@
   "scripts": {
     "prestart": "echo '⚡ Loading Model...'",
     "start": "node server.js",
-    "dev": "nodemon --experimental-json-modules server.js"
+    "dev": "nodemon --experimental-json-modules server.js",
+    "postinstall": "mkdir -p uploads",
+    "build": "echo 'Building backend...'"
   },
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.22.0",
@@ -20,6 +22,6 @@
     "nodemon": "^3.0.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   }
 }
