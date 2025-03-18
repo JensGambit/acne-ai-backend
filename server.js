@@ -7,29 +7,29 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import * as tf from "@tensorflow/tfjs-node";
 
-// ✅ Load environment variables
+// Load environment variables
 dotenv.config();
 
-// ✅ Fix __dirname for ES modules
+// Fix __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ Ensure environment variables exist
+// Ensure environment variables exist
 const BACKEND_URL = process.env.BACKEND_URL || `https://acne-ai-backend-2nmn.onrender.com`;
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://acneseverityai.netlify.app";
-console.log(`🌍 BACKEND_URL: ${BACKEND_URL}`);
-console.log(`🌍 FRONTEND_URL: ${FRONTEND_URL}`);
+console.log(`\uD83C\uDF0D BACKEND_URL: ${BACKEND_URL}`);
+console.log(`\uD83C\uDF0D FRONTEND_URL: ${FRONTEND_URL}`);
 
-// ✅ Ensure 'uploads/' directory exists
+// Ensure 'uploads/' directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ✅ Middleware Setup
+// Middleware Setup
 app.use(cors({
     origin: (origin, callback) => {
         const allowedOrigins = [FRONTEND_URL, "http://localhost:5173"];
@@ -44,11 +44,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Multer Storage
+// Multer Storage
 const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB Limit
 
-// ✅ Load TensorFlow Model
+// Load TensorFlow Model
 let model;
 const loadModel = async () => {
     try {
@@ -62,7 +62,7 @@ const loadModel = async () => {
 
         model = await tf.loadLayersModel(`file://${modelPath}`);
 
-        // ✅ Pre-warm the model
+        // Pre-warm the model
         const dummyInput = tf.zeros([1, 224, 224, 3]);
         model.predict(dummyInput);
         dummyInput.dispose();
@@ -73,10 +73,10 @@ const loadModel = async () => {
     }
 };
 
-// ✅ Ensure model is loaded before accepting requests
+// Ensure model is loaded before accepting requests
 await loadModel();
 
-// ✅ Image Upload Endpoint
+// Image Upload Endpoint
 app.post("/upload", upload.single("image"), async (req, res) => {
     try {
         if (!req.file) {
@@ -96,7 +96,7 @@ app.post("/upload", upload.single("image"), async (req, res) => {
     }
 });
 
-// ✅ Image Analysis Endpoint
+// Image Analysis Endpoint
 app.post("/analyze", upload.single("image"), async (req, res) => {
     try {
         if (!req.file) {
@@ -107,14 +107,14 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
             return res.status(500).json({ error: "Model not loaded yet. Please retry later." });
         }
 
-        // ✅ Convert image buffer to Tensor
+        // Convert image buffer to Tensor
         const tensor = tf.node.decodeImage(req.file.buffer)
             .resizeBilinear([224, 224])
             .expandDims(0)
             .toFloat()
             .div(tf.scalar(255));
 
-        // ✅ Run model prediction
+        // Run model prediction
         const prediction = model.predict(tensor);
         const result = await prediction.data();
         tensor.dispose();
@@ -126,21 +126,21 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     }
 });
 
-// ✅ Serve Uploaded Files
+// Serve Uploaded Files
 app.use("/uploads", express.static(uploadDir));
 
-// ✅ API Health Check
+// API Health Check
 app.get("/", (req, res) => {
     res.json({ message: "✅ Acne Severity Detector API is Running!" });
 });
 
-// ✅ Graceful Shutdown
+// Graceful Shutdown
 process.on("SIGINT", () => {
     console.log("🛑 Shutting down server...");
     process.exit(0);
 });
 
-// ✅ Start Server
+// Start Server
 app.listen(PORT, () => {
     console.log(`🚀 Server running at ${BACKEND_URL} on port ${PORT}`);
 });
