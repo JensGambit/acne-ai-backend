@@ -1,28 +1,27 @@
 {
   "name": "acne-backend",
   "version": "1.0.0",
-  "description": "Backend for Acne Severity Detector (Serverless on Netlify)",
+  "description": "Backend for Acne Severity Detector (Render Hosting)",
   "type": "module",
   "scripts": {
-    "preinstall": "rm -rf node_modules package-lock.json",
+    "preinstall": "npx rimraf node_modules package-lock.json",
     "prestart": "echo '⚡ Loading Model...'",
-    "start": "netlify dev", 
-    "dev": "nodemon --experimental-json-modules functions/analyze.js",
-    "postinstall": "mkdir -p uploads && echo '✅ Post-install tasks completed.'",
-    "build": "echo '🚀 Building backend...'",
-    "prepare": "echo '📦 Backend is ready for deployment!'"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "postinstall": "node -e \"require('fs').mkdirSync('uploads', { recursive: true })\" && echo '✅ Post-install tasks completed.'",
+    "build": "echo '🚀 Preparing for deployment...'",
+    "prepare": "echo '📦 Backend is ready!'"
   },
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.22.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "serverless-http": "^3.1.1"
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
-    "netlify-cli": "^17.0.0"
+    "rimraf": "^5.0.1"
   },
   "engines": {
     "node": ">=18.0.0"
