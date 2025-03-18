@@ -5,11 +5,13 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "preinstall": "rm -rf node_modules package-lock.json", 
     "prestart": "echo '⚡ Loading Model...'",
     "start": "node server.js",
     "dev": "nodemon --experimental-json-modules server.js",
-    "postinstall": "mkdir -p uploads",
-    "build": "echo 'Building backend...'"
+    "postinstall": "mkdir -p uploads && echo '✅ Post-install tasks completed.'",
+    "build": "echo '🚀 Building backend...'",
+    "prepare": "echo '📦 Backend is ready for deployment!'"
   },
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.22.0",
