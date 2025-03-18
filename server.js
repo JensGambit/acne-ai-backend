@@ -23,7 +23,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "https://acneseverityai.netlify
 console.log(`🌍 BACKEND_URL: ${BACKEND_URL}`);
 console.log(`🌍 FRONTEND_URL: ${FRONTEND_URL}`);
 
-// ✅ Ensure 'uploads/' directory exists (local only)
+// ✅ Ensure 'uploads/' directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -55,15 +55,14 @@ const loadModel = async () => {
         console.log("⏳ Loading TensorFlow model...");
         const modelPath = path.join(__dirname, "public", "models", "model.json");
 
-        // Check if model exists before loading
         if (!fs.existsSync(modelPath)) {
             console.error("❌ Model file not found at:", modelPath);
-            process.exit(1);
+            return;
         }
 
         model = await tf.loadLayersModel(`file://${modelPath}`);
 
-        // ✅ Pre-warm the model to prevent cold start lag
+        // ✅ Pre-warm the model
         const dummyInput = tf.zeros([1, 224, 224, 3]);
         model.predict(dummyInput);
         dummyInput.dispose();
@@ -71,10 +70,11 @@ const loadModel = async () => {
         console.log("✅ Model loaded successfully!");
     } catch (error) {
         console.error("❌ Error loading model:", error);
-        process.exit(1); // Exit if model loading fails
     }
 };
-loadModel();
+
+// ✅ Ensure model is loaded before accepting requests
+await loadModel();
 
 // ✅ Image Upload Endpoint
 app.post("/upload", upload.single("image"), async (req, res) => {
@@ -84,7 +84,7 @@ app.post("/upload", upload.single("image"), async (req, res) => {
         }
 
         const filePath = path.join(uploadDir, `${Date.now()}-${req.file.originalname}`);
-        await fs.promises.writeFile(filePath, req.file.buffer); // ✅ Save image asynchronously
+        await fs.promises.writeFile(filePath, req.file.buffer);
 
         res.status(200).json({
             message: "✅ Image uploaded successfully!",
@@ -117,7 +117,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
         // ✅ Run model prediction
         const prediction = model.predict(tensor);
         const result = await prediction.data();
-        tensor.dispose(); // ✅ Clean up tensor
+        tensor.dispose();
 
         res.json({ message: "✅ Analysis Complete", result });
     } catch (error) {
@@ -132,6 +132,12 @@ app.use("/uploads", express.static(uploadDir));
 // ✅ API Health Check
 app.get("/", (req, res) => {
     res.json({ message: "✅ Acne Severity Detector API is Running!" });
+});
+
+// ✅ Graceful Shutdown
+process.on("SIGINT", () => {
+    console.log("🛑 Shutting down server...");
+    process.exit(0);
 });
 
 // ✅ Start Server
