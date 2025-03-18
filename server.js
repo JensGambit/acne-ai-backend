@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import cors from "cors";
 import * as tf from "@tensorflow/tfjs-node";
-import fs from "fs/promises"; // Use fs.promises for async file handling
+import fs from "fs/promises"; // Async file handling
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -15,10 +15,10 @@ const __dirname = dirname(__filename);
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Enable CORS for frontend
+// Enable CORS (Configurable for production & development)
 app.use(
   cors({
-    origin: "https://acneseverityai.netlify.app", // Restrict to frontend URL
+    origin: process.env.CORS_ORIGIN || "https://acneseverityai.netlify.app",
     methods: ["POST"],
   })
 );
@@ -99,16 +99,20 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "Server is running." });
 });
 
+// Root route for verification
+app.get("/", (req, res) => {
+  res.status(200).send("✅ Backend is deployed on Railway!");
+});
+
 // Logging middleware
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url}`);
   next();
 });
 
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
+// Start server after loading model
+loadModel().then(() => {
+  app.listen(port, () => {
+    console.log(`🚀 Server running on port ${port}`);
+  });
 });
-
-// Load model on startup
-loadModel();
